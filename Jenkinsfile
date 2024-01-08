@@ -1,6 +1,7 @@
 pipeline {
   agent {
     kubernetes {
+      label 'sample-app'
       defaultContainer 'jnlp'
       yaml """
 apiVersion: v1
@@ -10,28 +11,32 @@ labels:
   component: ci
 spec:
   containers:
-  - name: gcloud
-    image: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
+  - name: gcloud-kubectl-docker
+    image: gcr.io/extended-arcana-408715/gcloud-kubectl-docker
     command:
     - cat
     tty: true
 """
-    }
+}
   }
   stages {
-    stage("Pushing Image to GCR") {
+    stage('Build and push image with Container Builder') {
       steps {
-        container('gcloud') {
-          sh "PYTHONUNBUFFERED=1 gcloud builds submit -t  gcr.io/gj-playground/frontend . "
-          }
+        container('gcloud-kubectl-docker') {
+          sh "gcloud auth activate-service-account --key-file=extended-arcana-408715-08a0471e7544.json"
+          sh "gcloud config set project extended-arcana-408715"
+          sh "PYTHONUNBUFFERED=1 gcloud builds submit -t gcr.io/extended-arcana-408715/frontend ."
         }
       }
-    stage("Deploy on kubernetes") {
-      steps {
-        script {
-          kubernetesDeploy(configs: "frontend.yaml")
-        }
+   }
+    stage('deployment'){
+      steps{
+        container('gcloud-kubectl-docker'){
+          sh"gcloud container clusters get-credentials mycluster --zone asia-east1-a --project extended-arcana-408715"
+          sh"kubectl apply -f frontend.yaml"
+}
+}
+
       }
     }
   }
-}
